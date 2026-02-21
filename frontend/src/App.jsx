@@ -8,8 +8,14 @@ import { API_BASE } from './config';
 import { isAuthenticated, clearSession, authFetch, getEmail } from './auth';
 import './App.css';
 
+function getResetToken() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('reset_token') || null;
+}
+
 function App() {
   const [authed, setAuthed] = useState(isAuthenticated());
+  const [resetToken, setResetToken] = useState(getResetToken);
   const [stocks, setStocks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -17,8 +23,8 @@ function App() {
   const [lastUpdated, setLastUpdated] = useState(null);
 
   useEffect(() => {
-    if (authed) fetchStocks();
-  }, [authed]);
+    if (authed && !resetToken) fetchStocks();
+  }, [authed, resetToken]);
 
   const handleLogout = () => {
     clearSession();
@@ -26,8 +32,19 @@ function App() {
     setStocks([]);
   };
 
-  if (!authed) {
-    return <AuthPage onAuthenticated={() => setAuthed(true)} />;
+  const handleResetComplete = () => {
+    setResetToken(null);
+    window.history.replaceState({}, '', window.location.pathname);
+  };
+
+  if (resetToken || !authed) {
+    return (
+      <AuthPage
+        onAuthenticated={() => { setResetToken(null); setAuthed(true); }}
+        resetToken={resetToken}
+        onResetComplete={handleResetComplete}
+      />
+    );
   }
 
   const fetchStocks = async () => {

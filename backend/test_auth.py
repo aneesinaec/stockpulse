@@ -2,7 +2,8 @@
 Unit tests for the auth module.
 
 Covers: registration, login, password validation, email validation,
-JWT creation/verification, the login_required decorator, and edge cases.
+JWT creation/verification, the login_required decorator,
+password reset flow, and edge cases.
 """
 
 import os
@@ -309,3 +310,138 @@ class TestLoginRequiredDecorator:
         with app.test_client() as c:
             resp = c.get("/protected2", headers={"Authorization": "Token abc"})
             assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Password reset — request (unit-level)
+# ---------------------------------------------------------------------------
+
+class TestRequestPasswordReset:
+    def test_returns_200_for_existing_email(self, db_path):
+        auth.register_user(VALID_EMAIL, VALID_PASSWORD, db_path)
+        body, status = auth.request_password_reset(VALID_EMAIL, db_path)
+        assert status == 200
+        assert body["success"] is True
+
+    def test_returns_200_for_unknown_email(self, db_path):
+        body, status = auth.request_password_reset("nobody@example.com", db_path)
+        assert status == 200
+        assert body["success"] is True
+
+    def test_returns_200_for_empty_email(self, db_path):
+        body, status = auth.request_password_reset("", db_path)
+        assert status == 200
+
+    def test_creates_token_in_db(self, db_path):
+        auth.register_user(VALID_EMAIL, VALID_PASSWORD, db_path)
+        auth.request_password_reset(VALID_EMAIL, db_path)
+        conn = auth.get_db(db_path)
+        row = conn.execute("SELECT token FROM password_reset_tokens").fetchone()
+        conn.close()
+        assert row is not None
+        assert len(row["token"]) > 20
+
+
+# ---------------------------------------------------------------------------
+# Password reset — reset (unit-level)
+# ---------------------------------------------------------------------------
+
+class TestResetPassword:
+    def _get_reset_token(self, db_path):
+        auth.register_user(VALID_EMAIL, VALID_PASSWORD, db_path)
+        auth.request_password_reset(VALID_EMAIL, db_path)
+        conn = auth.get_db(db_path)
+        row = conn.execute("SELECT token FROM password_reset_tokens").fetchone()
+        conn.close()
+        return row["token"]
+
+    def test_success(self, db_path):
+        token = self._get_reset_token(db_path)
+        new_pw = "NewStr0ng!"
+        body, status = auth.reset_password(token, new_pw, db_path)
+        assert status == 200
+        assert body["success"] is True
+        # Can login with new password
+        body, status = auth.login_user(VALID_EMAIL, new_pw, db_path)
+        assert status == 200
+
+    def test_old_password_no_longer_works(self, db_path):
+        token = self._get_reset_token(db_path)
+        auth.reset_password(token, "NewStr0ng!", db_path)
+        body, status = auth.login_user(VALID_EMAIL, VALID_PASSWORD, db_path)
+        assert status == 401
+
+    def test_token_cannot_be_reused(self, db_path):
+        token = self._get_reset_token(db_path)
+        auth.reset_password(token, "NewStr0ng!", db_path)
+        body, status = auth.reset_password(token, "Another1Pass", db_path)
+        assert status == 400
+        assert "already-used" in body["error"]
+
+    def test_invalid_token(self, db_path):
+        body, status = auth.reset_password("bogus-token", "NewStr0ng!", db_path)
+        assert status == 400
+
+    def test_expired_token(self, db_path, monkeypatch):
+        monkeypatch.setattr(auth, "RESET_TOKEN_EXPIRY_MINUTES", 0)
+        token = self._get_reset_token(db_path)
+        body, status = auth.reset_password(token, "NewStr0ng!", db_path)
+        assert status == 400
+        assert "expired" in body["error"]
+
+    def test_weak_new_password_rejected(self, db_path):
+        token = self._get_reset_token(db_path)
+        body, status = auth.reset_password(token, "weak", db_path)
+        assert status == 400
+
+    def test_empty_token_rejected(self, db_path):
+        body, status = auth.reset_password("", "NewStr0ng!", db_path)
+        assert status == 400
+
+
+# ---------------------------------------------------------------------------
+# Password reset — route integration
+# ---------------------------------------------------------------------------
+
+class TestResetRoutes:
+    def test_forgot_password_endpoint(self, client, db_path, monkeypatch):
+        monkeypatch.setattr(auth, "DB_PATH", db_path)
+        client.post("/api/auth/register", json={
+            "email": VALID_EMAIL,
+            "password": VALID_PASSWORD,
+        })
+        resp = client.post("/api/auth/forgot-password", json={
+            "email": VALID_EMAIL,
+        })
+        assert resp.status_code == 200
+        assert resp.get_json()["success"] is True
+
+    def test_reset_password_endpoint(self, client, db_path, monkeypatch):
+        monkeypatch.setattr(auth, "DB_PATH", db_path)
+        client.post("/api/auth/register", json={
+            "email": VALID_EMAIL,
+            "password": VALID_PASSWORD,
+        })
+        client.post("/api/auth/forgot-password", json={
+            "email": VALID_EMAIL,
+        })
+        conn = auth.get_db(db_path)
+        row = conn.execute("SELECT token FROM password_reset_tokens").fetchone()
+        conn.close()
+
+        new_pw = "ResetPass1!"
+        resp = client.post("/api/auth/reset-password", json={
+            "token": row["token"],
+            "password": new_pw,
+        })
+        assert resp.status_code == 200
+
+        login_resp = client.post("/api/auth/login", json={
+            "email": VALID_EMAIL,
+            "password": new_pw,
+        })
+        assert login_resp.status_code == 200
+
+    def test_forgot_password_no_json(self, client):
+        resp = client.post("/api/auth/forgot-password", data="not json")
+        assert resp.status_code == 200  # never leak email existence
