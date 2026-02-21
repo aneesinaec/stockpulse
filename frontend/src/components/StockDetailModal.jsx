@@ -9,6 +9,7 @@ import {
   Clock, Calendar, Zap, ArrowRight
 } from 'lucide-react';
 import { API_BASE } from '../config';
+import { authFetch } from '../auth';
 import './StockDetailModal.css';
 
 function StockDetailModal({ symbol, onClose }) {
@@ -27,7 +28,7 @@ function StockDetailModal({ symbol, onClose }) {
 
   const fetchStockDetail = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/stocks/${symbol}`);
+      const response = await authFetch(`${API_BASE}/api/stocks/${symbol}`);
       const result = await response.json();
       
       if (result.success) {

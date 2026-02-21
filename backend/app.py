@@ -17,6 +17,9 @@ app = Flask(__name__)
 # Allow CORS from any origin for the API
 CORS(app, origins=["*"], supports_credentials=True)
 
+from auth import register_auth_routes, login_required   # noqa: E402
+register_auth_routes(app)
+
 # Popular Indian stocks (NSE) - diversified across sectors
 INDIAN_STOCKS = [
     # Large Cap - IT
@@ -644,6 +647,7 @@ def fetch_stock_data(symbol):
         return None
 
 @app.route('/api/stocks', methods=['GET'])
+@login_required
 def get_stocks():
     """Get top 10 stocks trading below 52-week average, ranked by probability"""
     stocks = []
@@ -673,6 +677,7 @@ def get_stocks():
     })
 
 @app.route('/api/stocks/<symbol>', methods=['GET'])
+@login_required
 def get_stock_detail(symbol):
     """Get detailed analysis for a specific stock"""
     try:
@@ -816,4 +821,4 @@ def health_check():
     return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat()})
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5001)

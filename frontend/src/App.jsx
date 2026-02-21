@@ -3,10 +3,13 @@ import StockCard from './components/StockCard';
 import StockDetailModal from './components/StockDetailModal';
 import LoadingState from './components/LoadingState';
 import Header from './components/Header';
+import AuthPage from './components/AuthPage';
 import { API_BASE } from './config';
+import { isAuthenticated, clearSession, authFetch, getEmail } from './auth';
 import './App.css';
 
 function App() {
+  const [authed, setAuthed] = useState(isAuthenticated());
   const [stocks, setStocks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -14,14 +17,24 @@ function App() {
   const [lastUpdated, setLastUpdated] = useState(null);
 
   useEffect(() => {
-    fetchStocks();
-  }, []);
+    if (authed) fetchStocks();
+  }, [authed]);
+
+  const handleLogout = () => {
+    clearSession();
+    setAuthed(false);
+    setStocks([]);
+  };
+
+  if (!authed) {
+    return <AuthPage onAuthenticated={() => setAuthed(true)} />;
+  }
 
   const fetchStocks = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE}/api/stocks`);
+      const response = await authFetch(`${API_BASE}/api/stocks`);
       const data = await response.json();
       
       if (data.success) {
@@ -54,7 +67,7 @@ function App() {
         <div className="gradient-orb orb-2"></div>
       </div>
       
-      <Header lastUpdated={lastUpdated} onRefresh={fetchStocks} loading={loading} />
+      <Header lastUpdated={lastUpdated} onRefresh={fetchStocks} loading={loading} email={getEmail()} onLogout={handleLogout} />
       
       <main className="main-content">
         <div className="container">

@@ -8,4 +8,6 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.0"
+      - key: AUTH_SECRET_KEY
+        generateValue: true
     plan: free

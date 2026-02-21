@@ -1,8 +1,8 @@
 import React from 'react';
-import { TrendingUp, RefreshCw, BarChart3 } from 'lucide-react';
+import { TrendingUp, RefreshCw, BarChart3, LogOut } from 'lucide-react';
 import './Header.css';
 
-function Header({ lastUpdated, onRefresh, loading }) {
+function Header({ lastUpdated, onRefresh, loading, email, onLogout }) {
   const formatTime = (date) => {
     if (!date) return '';
     return date.toLocaleTimeString('en-IN', { 
@@ -53,6 +53,14 @@ function Header({ lastUpdated, onRefresh, loading }) {
             <RefreshCw size={18} className={loading ? 'spinning' : ''} />
             <span>{loading ? 'Loading...' : 'Refresh'}</span>
           </button>
+          {email && (
+            <div className="user-section">
+              <span className="user-email">{email}</span>
+              <button className="logout-button" onClick={onLogout} title="Sign out">
+                <LogOut size={16} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>
