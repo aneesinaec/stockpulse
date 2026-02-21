@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+backend/venv/
+
+# Build output
+frontend/dist/
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Logs
+*.log
+npm-debug.log*
